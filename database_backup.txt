@@ -1,0 +1,27 @@
+#Stage1 Backup
+###############
+declare @n varchar(100);
+select @n = 'Path_to_backup_file_' + CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112) + '.bak';
+BACKUP DATABASE [name] TO DISK = @n WITH NOFORMAT, INIT, NAME = N'Полная База данных Резервное копирование', SKIP, NOREWIND, NOUNLOAD, COMPRESSION, STATS = 10;
+GO
+
+или
+
+declare @n varchar(100);
+declare @DBname nvarchar(100);
+set @DBname = 'upp';
+select @n = 'Path\to\backup folder\' + @DBname + '\' + CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112)+ '_' +replace(Convert (varchar(8),GetDate(), 108),':','') + '_' + @DBname + '_full.bak';
+BACKUP DATABASE @DBname TO DISK = @n WITH NOFORMAT, INIT, NAME = N'Полная База данных Резервное копирование', SKIP, NOREWIND, NOUNLOAD, COMPRESSION, STATS = 10;
+GO
+
+#Stage2 Send report
+###############
+EXEC msdb.dbo.sp_send_dbmail
+	-- Созданный нами профиль администратора почтовых рассылок
+	@profile_name = 'Report SQL',
+	-- Адрес получателя
+	@recipients = 'reportsql@gkfs.com.ua;additional email for report',
+	-- Текст письма
+	@body = N'Резервная копия базы создана',
+	-- Тема
+	@subject = N'MSSQL Отчет';

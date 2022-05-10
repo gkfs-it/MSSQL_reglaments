@@ -1,0 +1,110 @@
+1 Step - mount share and create folder "YYYYMM"
+===================================================
+
+DECLARE @fileDate VARCHAR(20)
+DECLARE @pathDir VARCHAR(32)
+
+SELECT @fileDate = LEFT(CONVERT(varchar, GETDATE(),112),6)
+SELECT @pathDir = 'mkdir path\to\backups\' + @fileDate
+/*
+PRINT @fileDate
+PRINT @pathDir
+*/
+
+EXEC xp_cmdshell 'NET USE Z: \\fileshare.local.lan\share$ PASSWORD /USER:USERNAME /PERSISTENT:yes'
+
+EXEC xp_cmdshell @pathDir
+
+2 Step - create full backups all bases
+====================================================
+
+DECLARE @name VARCHAR(50) -- database name  
+DECLARE @path VARCHAR(256) -- path for backup files  
+DECLARE @fileName VARCHAR(256) -- filename for backup  
+DECLARE @fileDate VARCHAR(20) -- used for file name
+DECLARE @month VARCHAR(20) -- used for format YYYYMM
+DECLARE @makeBaseDir VARCHAR(64)
+ 
+-- specify filename format
+-- SELECT @fileDate = CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112)+ '_'+replace(Convert (varchar(8),GetDate(), 108),':','') 
+SELECT @fileDate = CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112) 
+SELECT @month = LEFT(CONVERT(varchar, GetDate(),112),6)
+
+
+-- specify database backup directory
+SET @path = 'path\to\backups\' + @month 
+ 
+DECLARE db_cursor CURSOR READ_ONLY FOR  
+SELECT name 
+FROM master.dbo.sysdatabases 
+WHERE name NOT IN ('master','model','msdb','tempdb','BaseToExclude')  -- exclude these databases
+ 
+OPEN db_cursor   
+FETCH NEXT FROM db_cursor INTO @name   
+ 
+WHILE @@FETCH_STATUS = 0   
+BEGIN   
+   SET @makeBaseDir = 'mkdir ' + @path + '\' + @name
+   EXEC xp_cmdshell @makeBaseDir
+   SET @fileName = @path + '\' + @name + '\' + @name + '_full_' +@fileDate + '.bak'  
+   BACKUP DATABASE @name TO DISK = @fileName  WITH NAME = N'Полная резервная копия', NOFORMAT, INIT, SKIP, NOREWIND, NOUNLOAD, COMPRESSION, STATS = 10
+ 
+   FETCH NEXT FROM db_cursor INTO @name   
+END   
+
+ 
+CLOSE db_cursor   
+DEALLOCATE db_cursor
+
+2.1 Step - create DIFFERENTIAL backup all bases, additional reglament
+=======================================================
+DECLARE @name VARCHAR(50) -- database name  
+DECLARE @path VARCHAR(256) -- path for backup files  
+DECLARE @fileName VARCHAR(256) -- filename for backup  
+DECLARE @fileDate VARCHAR(20) -- used for file name
+DECLARE @month VARCHAR(20) -- used for format YYYYMM
+ 
+-- specify filename format
+SELECT @fileDate = CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112)+ '_'+replace(Convert (varchar(8),GetDate(), 108),':','') 
+-- SELECT @fileDate = CONVERT(varchar(15),CONVERT(datetime, GETDATE()),112) 
+SELECT @month = LEFT(CONVERT(varchar, GetDate(),112),6)
+
+-- specify database backup directory
+SET @path = 'path\to\backups\' 
+ 
+DECLARE db_cursor CURSOR READ_ONLY FOR  
+SELECT name 
+FROM master.dbo.sysdatabases 
+WHERE name NOT IN ('master','model','msdb','tempdb','BaseToExclude')  -- exclude these databases
+ 
+OPEN db_cursor   
+FETCH NEXT FROM db_cursor INTO @name   
+ 
+WHILE @@FETCH_STATUS = 0   
+BEGIN   
+   SET @fileName = @path + '\' + @month + '\'  + @name + '\' + @name + '_' + @fileDate + '_diff.bak'  
+   BACKUP DATABASE @name TO DISK = @fileName  WITH NAME = N'Разностная резервная копия', NOFORMAT, INIT, SKIP, NOREWIND, NOUNLOAD, COMPRESSION, DIFFERENTIAL, STATS = 10
+ 
+   FETCH NEXT FROM db_cursor INTO @name   
+END   
+
+ 
+CLOSE db_cursor   
+DEALLOCATE db_cursor
+
+3 Step - send report
+=======================================================
+EXEC msdb.dbo.sp_send_dbmail
+	-- Созданный нами профиль администратора почтовых рассылок
+	@profile_name = 'Report SQL',
+	-- Адрес получателя
+	@recipients = 'report@mail',
+	-- Текст письма
+	@body = N'Резервная копии всех баз создана',
+	-- Тема
+	@subject = N'MSSQL Backup OK';
+
+
+4 Step - unmount share
+=======================================================
+EXEC xp_cmdshell 'NET USE Z: /DELETE'

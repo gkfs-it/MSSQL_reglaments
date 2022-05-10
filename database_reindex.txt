@@ -1,0 +1,7 @@
+#Stage1 Reindex
+###################
+sp_msforeachtable N'DBCC DBREINDEX (''?'')'
+
+#Stage2 Send report
+###################
+....

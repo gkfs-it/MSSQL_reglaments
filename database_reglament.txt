@@ -1,0 +1,25 @@
+# Все выполняется в контексте самой базы, а не системной базы master
+
+#Stage1 Update statistics
+#########################
+exec sp_msforeachtable N'UPDATE STATISTICS ? WITH FULLSCAN'
+
+#Stage2 Clear cache
+#########################
+DBCC FREEPROCCACHE
+
+#Stage3 Dafragmentation indexes
+#########################
+sp_msforeachtable N'DBCC INDEXDEFRAG (database_name, ''?'')'
+
+#Stage2 Send report
+#########################
+EXEC msdb.dbo.sp_send_dbmail
+	-- Созданный нами профиль администратора почтовых рассылок
+	@profile_name = 'Report SQL',
+	-- Адрес получателя
+	@recipients = 'reportsql@gkfs.com.ua;additional email',
+	-- Текст письма
+	@body = N'Регламентные работы завершены',
+	-- Тема
+	@subject = N'MSSQL Отчет';
