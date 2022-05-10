@@ -1,0 +1,3 @@
+### MSSQL Reglamets
+
+Insert this sql-scripts to your own MSSQL Agents with your parameters
